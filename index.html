@@ -297,12 +297,14 @@
     let rawDataStore = { residential: [], commercial: [] };
     let timeChart, modalChart;
 
-    // Robust field search for both Residential and Commercial schema variations
-    function getPropByKeywords(props, keywords) {
+    // BULLETPROOF SCANNER: Strips casing, underscores, and spaces to find properties
+    function getProp(props, keywords) {
       if (!props) return null;
       const keys = Object.keys(props);
       for (const kw of keywords) {
-        const match = keys.find(k => k.replace(/_/g, '').toUpperCase().includes(kw.replace(/_/g, '').toUpperCase()));
+        const cleanTarget = kw.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        const match = keys.find(k => k.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === cleanTarget || 
+                                     k.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().includes(cleanTarget));
         if (match && props[match] !== undefined && props[match] !== null && props[match] !== '') {
           return props[match];
         }
@@ -311,34 +313,39 @@
     }
 
     function parsePermitDate(props) {
-      const raw = getPropByKeywords(props, [
-        'ISSUEDATE', 'ISSUE_DATE', 'DATE_ISSUED', 'PERMIT_DATE', 'ISSUED', 'APP_DATE', 'DATE', 'YEAR_ISSUED'
-      ]);
-
+      const raw = getProp(props, ['issuedate', 'dateissued', 'permitdate', 'date', 'yearissued', 'year']);
       if (!raw) return null;
-      if (typeof raw === 'number') return new Date(raw);
+      
+      // Handle epoch timestamps (e.g., 1754352000000) or 4-digit years (e.g., 2025)
+      if (typeof raw === 'number') {
+        if (raw > 1900 && raw < 2100) return new Date(`${raw}-01-01`); // It's just a year
+        return new Date(raw); // It's a millisecond timestamp
+      }
+      
       const parsed = new Date(raw);
       return !isNaN(parsed.getTime()) ? parsed : null;
     }
 
     function buildPopup(props, type) {
-      const addr = getPropByKeywords(props, ['ADDRESS', 'LOCATION', 'SITE', 'STREET']) || 'El Paso Property';
-      const permitId = getPropByKeywords(props, ['PERMIT_ID', 'PERMIT_NUM', 'PERMIT', 'RECORD_ID', 'RECORD']) || 'N/A';
+      const addr = getProp(props, ['address', 'location', 'site', 'propaddr']) || 'El Paso Property';
+      const permitId = getProp(props, ['permitid', 'permitnum', 'recordid', 'permit']) || 'N/A';
       
       const dateObj = parsePermitDate(props);
       const dateStr = dateObj ? dateObj.toLocaleDateString() : 'N/A';
 
-      const comments = getPropByKeywords(props, ['COMMENTS', 'DEVELOPMENT', 'PERMIT_TYPE', 'DESCRIPTION', 'WORK_DESC']) || '';
-      const district = getPropByKeywords(props, ['DISTRICT', 'COUNCIL']) || '';
+      const devType = getProp(props, ['typeofdevelopment', 'development', 'comments', 'workdesc']) || 'N/A';
+      const permType = getProp(props, ['typeofpermit', 'permittype', 'permitclass', 'class']) || 'N/A';
+      const district = getProp(props, ['district', 'council']) || '';
 
       return `
         <div class="popup-content">
           <h3>${addr}</h3>
-          <div class="popup-row"><span class="label">Type:</span><span><strong>${type}</strong></span></div>
           <div class="popup-row"><span class="label">Permit ID:</span><span><strong>${permitId}</strong></span></div>
+          <div class="popup-row"><span class="label">Group:</span><span>${type}</span></div>
           <div class="popup-row"><span class="label">Issue Date:</span><span>${dateStr}</span></div>
+          <div class="popup-row"><span class="label">Development:</span><span style="text-align: right; max-width: 60%;">${devType}</span></div>
+          <div class="popup-row"><span class="label">Permit Type:</span><span style="text-align: right; max-width: 60%;">${permType}</span></div>
           ${district ? `<div class="popup-row"><span class="label">District:</span><span>District ${district}</span></div>` : ''}
-          ${comments ? `<div class="popup-row" style="margin-top:4px; flex-direction:column; gap:2px;"><span class="label">Details:</span><span style="font-size:0.75rem; color:#cbd5e1;">${comments}</span></div>` : ''}
         </div>
       `;
     }
@@ -368,7 +375,6 @@
       }
     }
 
-    // Dynamic Option Extractor with comment parsing fallback
     function populateDropdowns() {
       const devTypes = new Set();
       const permitTypes = new Set();
@@ -376,10 +382,10 @@
       const scanProps = (features) => {
         features.forEach(f => {
           const p = f.properties || {};
-          let dev = getPropByKeywords(p, ['TYPE_OF_DEVELOPMENT', 'DEVELOPMENT', 'RECORD_TYPE', 'WORK_TYPE', 'COMMENTS']);
-          let per = getPropByKeywords(p, ['TYPE_OF_PERMIT', 'PERMIT_TYPE', 'PERMIT_CLASS', 'CLASS']);
+          let dev = getProp(p, ['typeofdevelopment', 'development', 'comments', 'workdesc', 'description']);
+          let per = getProp(p, ['typeofpermit', 'permittype', 'permitclass', 'class', 'recordtype']);
 
-          // Parse strings with separators (e.g., "123 Main St | Single Family Residential")
+          // Clean up piped text (e.g. "Address | Tenant Improvement")
           if (dev && typeof dev === 'string') {
             if (dev.includes('|')) dev = dev.split('|')[1].trim();
             else if (dev.includes('-')) dev = dev.split('-')[0].trim();
@@ -423,24 +429,23 @@
         const p = f.properties || {};
 
         if (distFilter !== 'ALL') {
-          const distVal = getPropByKeywords(p, ['DISTRICT', 'COUNCIL']);
+          const distVal = getProp(p, ['district', 'council']);
           if (String(distVal).trim() !== distFilter) return false;
         }
 
         if (devFilter !== 'ALL') {
-          let devVal = String(getPropByKeywords(p, ['TYPE_OF_DEVELOPMENT', 'DEVELOPMENT', 'RECORD_TYPE', 'WORK_TYPE', 'COMMENTS']) || '');
+          let devVal = String(getProp(p, ['typeofdevelopment', 'development', 'comments', 'workdesc', 'description']) || '');
           if (!devVal.toLowerCase().includes(devFilter.toLowerCase())) return false;
         }
 
         if (permFilter !== 'ALL') {
-          const permVal = String(getPropByKeywords(p, ['TYPE_OF_PERMIT', 'PERMIT_TYPE', 'PERMIT_CLASS', 'CLASS']) || '');
+          const permVal = String(getProp(p, ['typeofpermit', 'permittype', 'permitclass', 'class', 'recordtype']) || '');
           if (!permVal.toLowerCase().includes(permFilter.toLowerCase())) return false;
         }
 
         if (startDate || endDate) {
           const pDate = parsePermitDate(p);
-          // If a date filter IS specified, drop un-dated features
-          if (!pDate) return false;
+          if (!pDate) return false; // Hide undated features only when filtering by date
           if (startDate && pDate < startDate) return false;
           if (endDate && pDate > endDate) return false;
         }
