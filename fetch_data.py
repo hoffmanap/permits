@@ -19,7 +19,7 @@ def fetch_layer_geojson(base_url: str) -> dict:
         params = {
             "where": "1=1",
             "outFields": "*",
-            "outSR": "4326",  # MUST BE 4326 for Leaflet compatibility
+            "outSR": "4326",  # Force WGS84 coordinates (Lat/Lng)
             "f": "geojson",
             "resultRecordCount": record_limit,
             "resultOffset": offset,
@@ -34,15 +34,19 @@ def fetch_layer_geojson(base_url: str) -> dict:
             with urllib.request.urlopen(req) as response:
                 data = json.loads(response.read().decode("utf-8"))
         except Exception as e:
-            print(f"Error querying {url}: {e}")
+            print(f"Error requesting {url}: {e}")
             break
 
         features = data.get("features", [])
         if not features:
             break
 
-        # Filter out features without valid geometry
-        valid_features = [f for f in features if f.get("geometry")]
+        # Filter out features without valid geometries or missing coordinates
+        valid_features = [
+            f
+            for f in features
+            if f.get("geometry") and f["geometry"].get("coordinates")
+        ]
         all_features.extend(valid_features)
 
         if len(features) < record_limit:
@@ -57,7 +61,7 @@ def main():
     os.makedirs("data", exist_ok=True)
 
     for name, endpoint in ENDPOINTS.items():
-        print(f"Fetching {name} dataset...")
+        print(f"Fetching and processing {name} dataset...")
         geojson_data = fetch_layer_geojson(endpoint)
         output_path = os.path.join("data", f"{name}.geojson")
 
@@ -65,7 +69,7 @@ def main():
             json.dump(geojson_data, f)
 
         print(
-            f"Saved {len(geojson_data['features'])} features to {output_path}"
+            f"Saved {len(geojson_data['features'])} valid features to {output_path}"
         )
 
 
