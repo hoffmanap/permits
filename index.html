@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>El Paso Building Permit Tracker</title>
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+
+  <style>
+    :root {
+      --bg-dark: #121824;
+      --card-bg: rgba(26, 34, 52, 0.9);
+      --border-color: #2e3c54;
+      --text-main: #f0f4f8;
+      --text-muted: #8c9ba5;
+      --accent-res: #2563eb;
+      --accent-com: #e11d48;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    header {
+      background: #0f172a;
+      padding: 0.85rem 1.5rem;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    header h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    #main-container {
+      display: flex;
+      flex: 1;
+      position: relative;
+    }
+
+    #map {
+      flex: 1;
+      height: 100%;
+      background-color: #0b0f19;
+    }
+
+    /* Dashboard Overlay Panel */
+    .dashboard-panel {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      z-index: 1000;
+      width: 320px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      pointer-events: none;
+    }
+
+    .panel-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 1rem;
+      pointer-events: auto;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    .metric-box {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 0.75rem;
+    }
+
+    .metric-box.full-width {
+      grid-column: span 2;
+    }
+
+    .metric-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 0.25rem;
+    }
+
+    .metric-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    .metric-value.res { color: #60a5fa; }
+    .metric-value.com { color: #f87171; }
+
+    /* Control Filters */
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+
+    .filter-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+    }
+
+    .badge-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .badge-res { background-color: var(--accent-res); }
+    .badge-com { background-color: var(--accent-com); }
+
+    /* Popup Customization */
+    .leaflet-popup-content-wrapper {
+      background: #1e293b;
+      color: #f8fafc;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-family: inherit;
+    }
+
+    .leaflet-popup-tip {
+      background: #1e293b;
+    }
+
+    .popup-content h3 {
+      font-size: 0.95rem;
+      margin-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 0.25rem;
+    }
+
+    .popup-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .popup-row .label {
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div>
+      <h1>El Paso Construction Permit Dashboard</h1>
+      <p>Tracking New Residential & Commercial Building Activity</p>
+    </div>
+  </header>
+
+  <div id="main-container">
+    <div class="dashboard-panel">
+      <!-- Metrics Card -->
+      <div class="panel-card">
+        <div class="metrics-grid">
+          <div class="metric-box full-width">
+            <div class="metric-title">Total Active Permits</div>
+            <div class="metric-value" id="total-count">--</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-title">Residential</div>
+            <div class="metric-value res" id="res-count">--</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-title">Commercial</div>
+            <div class="metric-value com" id="com-count">--</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filters Card -->
+      <div class="panel-card">
+        <div class="metric-title">Layer Visibility</div>
+        <div class="filter-group">
+          <label class="filter-item">
+            <span class="checkbox-label">
+              <span class="badge-dot badge-res"></span>
+              New Residential
+            </span>
+            <input type="checkbox" id="toggle-res" checked />
+          </label>
+          <label class="filter-item">
+            <span class="checkbox-label">
+              <span class="badge-dot badge-com"></span>
+              New Commercial
+            </span>
+            <input type="checkbox" id="toggle-com" checked />
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div id="map"></div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <script>
+    // Initialize Map centered on El Paso
+    const map = L.map('map', {
+      center: [31.7619, -106.4850],
+      zoom: 11,
+      zoomControl: false
+    });
+
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+    // Dark Map Base Tiles
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap &copy; CARTO',
+      subdomains: 'abcd',
+      maxZoom: 19
+    }).addTo(map);
+
+    // Dynamic URL detection for GitHub Pages vs Local execution
+    const BASE_URL = window.location.hostname.includes('github.io')
+      ? './data/'
+      : 'https://raw.githubusercontent.com/hoffmanap/permits/main/data/';
+
+    let resLayer, comLayer;
+    let counts = { res: 0, com: 0 };
+
+    // Common function to format popups dynamically based on feature attributes
+    function createPopupContent(properties, type) {
+      const title = properties.ADDRESS || properties.Address || properties.PROP_ADDR || 'Permit Location';
+      const permitNum = properties.PERMIT_NUM || properties.PermitNumber || properties.RECORD_ID || 'N/A';
+      const val = properties.VALUATION || properties.Valuation || properties.JOB_VALUE || 'N/A';
+      const issueDate = properties.ISSUE_DATE || properties.IssuedDate || properties.DATE || 'N/A';
+
+      return `
+        <div class="popup-content">
+          <h3>${title}</h3>
+          <div class="popup-row">
+            <span class="label">Type:</span>
+            <span><strong>${type}</strong></span>
+          </div>
+          <div class="popup-row">
+            <span class="label">Permit #:</span>
+            <span>${permitNum}</span>
+          </div>
+          <div class="popup-row">
+            <span class="label">Issued Date:</span>
+            <span>${issueDate}</span>
+          </div>
+          <div class="popup-row">
+            <span class="label">Valuation:</span>
+            <span>${typeof val === 'number' ? '$' + val.toLocaleString() : val}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    // Helper to fetch and render GeoJSON layers
+    async function loadDataset(filename, color, typeLabel) {
+      try {
+        const response = await fetch(`${BASE_URL}${filename}`);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+
+        const layer = L.geoJSON(data, {
+          style: {
+            color: color,
+            weight: 2,
+            fillColor: color,
+            fillOpacity: 0.4
+          },
+          pointToLayer: function (feature, latlng) {
+            return L.circleMarker(latlng, {
+              radius: 6,
+              fillColor: color,
+              color: '#ffffff',
+              weight: 1,
+              opacity: 0.9,
+              fillOpacity: 0.7
+            });
+          },
+          onEachFeature: function (feature, layer) {
+            layer.bindPopup(createPopupContent(feature.properties, typeLabel));
+          }
+        }).addTo(map);
+
+        return { layer, count: data.features ? data.features.length : 0 };
+      } catch (err) {
+        console.error(`Error loading ${filename}:`, err);
+        return { layer: null, count: 0 };
+      }
+    }
+
+    async function initDashboard() {
+      // Load both datasets in parallel
+      const [resResult, comResult] = await Promise.all([
+        loadDataset('residential.geojson', '#2563eb', 'Residential'),
+        loadDataset('commercial.geojson', '#e11d48', 'Commercial')
+      ]);
+
+      resLayer = resResult.layer;
+      comLayer = comResult.layer;
+
+      counts.res = resResult.count;
+      counts.com = comResult.count;
+
+      // Update UI Counts
+      document.getElementById('res-count').textContent = counts.res.toLocaleString();
+      document.getElementById('com-count').textContent = counts.com.toLocaleString();
+      document.getElementById('total-count').textContent = (counts.res + counts.com).toLocaleString();
+
+      // Fit map bounds if data exists
+      const group = new L.featureGroup([
+        ...(resLayer ? [resLayer] : []),
+        ...(comLayer ? [comLayer] : [])
+      ]);
+      if (group.getLayers().length > 0) {
+        map.fitBounds(group.getBounds(), { padding: [50, 50] });
+      }
+
+      // Filter Toggle Controls
+      document.getElementById('toggle-res').addEventListener('change', (e) => {
+        if (!resLayer) return;
+        if (e.target.checked) map.addLayer(resLayer);
+        else map.removeLayer(resLayer);
+      });
+
+      document.getElementById('toggle-com').addEventListener('change', (e) => {
+        if (!comLayer) return;
+        if (e.target.checked) map.addLayer(comLayer);
+        else map.removeLayer(comLayer);
+      });
+    }
+
+    initDashboard();
+  </script>
+</body>
+</html>
