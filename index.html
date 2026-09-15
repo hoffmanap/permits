@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>El Paso Building Permit Tracker</title>
+  <title>El Paso Construction Permit Dashboard</title>
 
   <!-- Leaflet CSS -->
   <link
@@ -73,7 +73,6 @@
       background-color: #0b0f19;
     }
 
-    /* Dashboard Overlay Panel */
     .dashboard-panel {
       position: absolute;
       top: 1rem;
@@ -129,7 +128,6 @@
     .metric-value.res { color: #60a5fa; }
     .metric-value.com { color: #f87171; }
 
-    /* Control Filters */
     .filter-group {
       display: flex;
       flex-direction: column;
@@ -162,7 +160,6 @@
     .badge-res { background-color: var(--accent-res); }
     .badge-com { background-color: var(--accent-com); }
 
-    /* Popup Customization */
     .leaflet-popup-content-wrapper {
       background: #1e293b;
       color: #f8fafc;
@@ -205,7 +202,6 @@
 
   <div id="main-container">
     <div class="dashboard-panel">
-      <!-- Metrics Card -->
       <div class="panel-card">
         <div class="metrics-grid">
           <div class="metric-box full-width">
@@ -223,7 +219,6 @@
         </div>
       </div>
 
-      <!-- Filters Card -->
       <div class="panel-card">
         <div class="metric-title">Layer Visibility</div>
         <div class="filter-group">
@@ -256,7 +251,6 @@
   ></script>
 
   <script>
-    // Initialize Map centered on El Paso
     const map = L.map('map', {
       center: [31.7619, -106.4850],
       zoom: 11,
@@ -265,27 +259,28 @@
 
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    // Dark Map Base Tiles
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; OpenStreetMap &copy; CARTO',
       subdomains: 'abcd',
       maxZoom: 19
     }).addTo(map);
 
-    // Dynamic URL detection for GitHub Pages vs Local execution
-    const BASE_URL = window.location.hostname.includes('github.io')
-      ? './data/'
-      : 'https://raw.githubusercontent.com/hoffmanap/permits/main/data/';
+    // Uses raw.githubusercontent.com to bypass CORS restrictions
+    const DATA_PATH = 'https://raw.githubusercontent.com/hoffmanap/permits/main/data/';
 
     let resLayer, comLayer;
     let counts = { res: 0, com: 0 };
 
-    // Common function to format popups dynamically based on feature attributes
     function createPopupContent(properties, type) {
-      const title = properties.ADDRESS || properties.Address || properties.PROP_ADDR || 'Permit Location';
-      const permitNum = properties.PERMIT_NUM || properties.PermitNumber || properties.RECORD_ID || 'N/A';
-      const val = properties.VALUATION || properties.Valuation || properties.JOB_VALUE || 'N/A';
-      const issueDate = properties.ISSUE_DATE || properties.IssuedDate || properties.DATE || 'N/A';
+      const getVal = (possibleKeys) => {
+        const match = possibleKeys.find(k => properties[k] !== undefined && properties[k] !== null);
+        return match ? properties[match] : 'N/A';
+      };
+
+      const title = getVal(['ADDRESS', 'Address', 'PROP_ADDR', 'SITE_ADDRESS', 'STREET_ADDRESS']);
+      const permitNum = getVal(['PERMIT_NUM', 'PermitNumber', 'RECORD_ID', 'PERMIT_ID', 'OBJECTID']);
+      const val = getVal(['VALUATION', 'Valuation', 'JOB_VALUE', 'ESTIMATED_COST']);
+      const issueDate = getVal(['ISSUE_DATE', 'IssuedDate', 'DATE', 'ISSUED_DATE']);
 
       return `
         <div class="popup-content">
@@ -310,12 +305,21 @@
       `;
     }
 
-    // Helper to fetch and render GeoJSON layers
     async function loadDataset(filename, color, typeLabel) {
       try {
-        const response = await fetch(`${BASE_URL}${filename}`);
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const fileUrl = `${DATA_PATH}${filename}`;
+        console.log(`Fetching GeoJSON from: ${fileUrl}`);
+        
+        const response = await fetch(fileUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to load ${fileUrl}: Status ${response.status} ${response.statusText}`);
+        }
+        
         const data = await response.json();
+        if (!data || !data.features) {
+          console.warn(`No features found in ${filename}`, data);
+          return { layer: null, count: 0 };
+        }
 
         const layer = L.geoJSON(data, {
           style: {
@@ -339,15 +343,14 @@
           }
         }).addTo(map);
 
-        return { layer, count: data.features ? data.features.length : 0 };
+        return { layer, count: data.features.length };
       } catch (err) {
-        console.error(`Error loading ${filename}:`, err);
+        console.error(`Error loading dataset (${filename}):`, err);
         return { layer: null, count: 0 };
       }
     }
 
     async function initDashboard() {
-      // Load both datasets in parallel
       const [resResult, comResult] = await Promise.all([
         loadDataset('residential.geojson', '#2563eb', 'Residential'),
         loadDataset('commercial.geojson', '#e11d48', 'Commercial')
@@ -359,21 +362,21 @@
       counts.res = resResult.count;
       counts.com = comResult.count;
 
-      // Update UI Counts
       document.getElementById('res-count').textContent = counts.res.toLocaleString();
       document.getElementById('com-count').textContent = counts.com.toLocaleString();
       document.getElementById('total-count').textContent = (counts.res + counts.com).toLocaleString();
 
-      // Fit map bounds if data exists
-      const group = new L.featureGroup([
-        ...(resLayer ? [resLayer] : []),
-        ...(comLayer ? [comLayer] : [])
-      ]);
-      if (group.getLayers().length > 0) {
-        map.fitBounds(group.getBounds(), { padding: [50, 50] });
+      const layersToFit = [];
+      if (resLayer) layersToFit.push(resLayer);
+      if (comLayer) layersToFit.push(comLayer);
+
+      if (layersToFit.length > 0) {
+        const group = new L.featureGroup(layersToFit);
+        if (group.getLayers().length > 0 && group.getBounds().isValid()) {
+          map.fitBounds(group.getBounds(), { padding: [50, 50] });
+        }
       }
 
-      // Filter Toggle Controls
       document.getElementById('toggle-res').addEventListener('change', (e) => {
         if (!resLayer) return;
         if (e.target.checked) map.addLayer(resLayer);
