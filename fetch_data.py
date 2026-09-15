@@ -19,7 +19,7 @@ def fetch_layer_geojson(base_url: str) -> dict:
         params = {
             "where": "1=1",
             "outFields": "*",
-            "outSR": "4326",  # Standard WGS84 for GeoJSON
+            "outSR": "4326",  # MUST BE 4326 for Leaflet compatibility
             "f": "geojson",
             "resultRecordCount": record_limit,
             "resultOffset": offset,
@@ -30,16 +30,21 @@ def fetch_layer_geojson(base_url: str) -> dict:
             url, headers={"User-Agent": "Mozilla/5.0"}
         )
 
-        with urllib.request.urlopen(req) as response:
-            data = json.loads(response.read().decode("utf-8"))
+        try:
+            with urllib.request.urlopen(req) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except Exception as e:
+            print(f"Error querying {url}: {e}")
+            break
 
         features = data.get("features", [])
         if not features:
             break
 
-        all_features.extend(features)
+        # Filter out features without valid geometry
+        valid_features = [f for f in features if f.get("geometry")]
+        all_features.extend(valid_features)
 
-        # Stop if we fetched fewer records than the limit (reached the end)
         if len(features) < record_limit:
             break
 
