@@ -292,7 +292,7 @@
     let rawDataStore = { residential: [], commercial: [] };
     let timeChart, modalChart;
 
-    // Strict schema lookup based on El Paso's actual JSON keys
+    // Base Helper
     function getVal(props, keys) {
       if (!props) return null;
       for (const k of keys) {
@@ -303,32 +303,63 @@
       return null;
     }
 
+    // Handles both Residential (Issued_Dat) and Commercial (ISSUEDATE) epochs
     function parsePermitDate(props) {
-      const raw = getVal(props, ['ISSUEDATE', 'ISSUE_DATE']);
+      const raw = getVal(props, ['Issued_Dat', 'ISSUEDATE', 'ISSUE_DATE', 'REC_DATE']);
       if (!raw) return null;
       if (typeof raw === 'number') return new Date(raw); 
       const parsed = new Date(raw);
       return !isNaN(parsed.getTime()) ? parsed : null;
     }
 
-    function buildPopup(props, type) {
-      const addr = getVal(props, ['Address', 'SITEADDR_S']) || 'El Paso Property';
+    // Advanced scrubber to remove numbers & addresses from the Use Type dropdown
+    function getCleanDevType(props) {
+      let dev = getVal(props, ['ARC_Street', 'CENSUSCATE']);
+      if (!dev) return 'N/A';
       
-      // Mapped directly to JSON snippet
+      dev = String(dev).trim();
+      
+      // Remove known El Paso Census prefixes (e.g., "213a - New Motels" -> "New Motels")
+      if (dev.includes(' - ')) {
+          dev = dev.split(' - ')[1].trim();
+      } else if (/^\d{3}[a-zA-Z]?\s/.test(dev)) {
+          // "437a Alteration" -> "Alteration"
+          dev = dev.replace(/^\d{3}[a-zA-Z]?\s/, '').trim();
+      }
+
+      // Explicitly reject strings that still contain numbers or address suffixes
+      if (/\d/.test(dev)) return 'N/A';
+      
+      const addressKeywords = ['PLAZA', 'TRAIL', 'CENTER', 'STREET', 'BLVD', 'AVE', 'DRIVE', 'AMERICAS'];
+      if (addressKeywords.some(kw => dev.toUpperCase().includes(kw))) return 'N/A';
+      
+      return dev || 'N/A';
+    }
+
+    function getCleanPermitType(props) {
+      let perm = getVal(props, ['Record_Typ']);
+      if (!perm) return 'N/A';
+      
+      perm = String(perm).trim();
+      // Handle Commercial formats like "Commercial/Tenant Improvement/NA"
+      if (perm.includes('/')) {
+        const parts = perm.split('/');
+        perm = parts.length > 1 ? parts[1].trim() : perm;
+      }
+      
+      return perm || 'N/A';
+    }
+
+    function buildPopup(props, type) {
+      const addr = getVal(props, ['Street_Add', 'Address', 'SITEADDR_S']) || 'El Paso Property';
       const permitId = getVal(props, ['B1_ALT_ID', 'OBJECTID']) || 'N/A';
-      const devType = getVal(props, ['ARC_Street', 'CENSUSCATE']) || 'N/A';
-      let permType = getVal(props, ['Record_Typ']) || 'N/A';
+      const devType = getCleanDevType(props);
+      const permType = getCleanPermitType(props);
       const comments = getVal(props, ['B1_SPECIAL', 'Descriptio']) || '';
       const district = getVal(props, ['District']) || '';
 
       const dateObj = parsePermitDate(props);
       const dateStr = dateObj ? dateObj.toLocaleDateString() : 'N/A';
-
-      // Clean up Record_Typ string (e.g. "Commercial/Tenant Improvement/NA" -> "Tenant Improvement")
-      if (permType !== 'N/A' && permType.includes('/')) {
-        const parts = permType.split('/');
-        permType = parts.length > 1 ? parts[1] : permType;
-      }
 
       return `
         <div class="popup-content">
@@ -377,15 +408,11 @@
         features.forEach(f => {
           const p = f.properties || {};
           
-          let dev = getVal(p, ['ARC_Street', 'CENSUSCATE']);
-          let per = getVal(p, ['Record_Typ']);
+          let dev = getCleanDevType(p);
+          let per = getCleanPermitType(p);
 
-          if (per && typeof per === 'string' && per.includes('/')) {
-            per = per.split('/')[1].trim(); 
-          }
-
-          if (dev && String(dev).length > 2) devTypes.add(String(dev).trim());
-          if (per && String(per).length > 2 && per !== 'NA') permitTypes.add(String(per).trim());
+          if (dev !== 'N/A' && dev.length > 2) devTypes.add(dev);
+          if (per !== 'N/A' && per.length > 2 && per !== 'NA') permitTypes.add(per);
         });
       };
 
@@ -427,13 +454,12 @@
         }
 
         if (devFilter !== 'ALL') {
-          let devVal = String(getVal(p, ['ARC_Street', 'CENSUSCATE']) || '');
-          if (devVal.trim() !== devFilter) return false;
+          let devVal = getCleanDevType(p);
+          if (devVal !== devFilter) return false;
         }
 
         if (permFilter !== 'ALL') {
-          let permVal = String(getVal(p, ['Record_Typ']) || '');
-          if (permVal.includes('/')) permVal = permVal.split('/')[1].trim();
+          let permVal = getCleanPermitType(p);
           if (permVal !== permFilter) return false;
         }
 
