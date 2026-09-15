@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>El Paso Construction Permit Dashboard</title>
+  <title>El Paso Building Permit Tracker</title>
 
   <!-- Leaflet CSS -->
   <link
@@ -265,44 +265,47 @@
       maxZoom: 19
     }).addTo(map);
 
-    // Uses raw.githubusercontent.com to bypass CORS restrictions
     const DATA_PATH = 'https://raw.githubusercontent.com/hoffmanap/permits/main/data/';
 
     let resLayer, comLayer;
     let counts = { res: 0, com: 0 };
 
-    function createPopupContent(properties, type) {
-      const getVal = (possibleKeys) => {
-        const match = possibleKeys.find(k => properties[k] !== undefined && properties[k] !== null);
-        return match ? properties[match] : 'N/A';
-      };
+    function buildPopup(props, type) {
+      const findKey = (candidates) => candidates.find(c => props[c] !== undefined && props[c] !== null);
+      
+      const addrKey = findKey(['ADDRESS', 'Address', 'PROP_ADDR', 'SITE_ADDRESS', 'STREET_ADDRESS', 'LOCATION']);
+      const numKey = findKey(['PERMIT_NUM', 'PermitNumber', 'RECORD_ID', 'PERMIT_ID', 'OBJECTID', 'FID']);
+      const valKey = findKey(['VALUATION', 'Valuation', 'JOB_VALUE', 'ESTIMATED_COST']);
+      const dateKey = findKey(['ISSUE_DATE', 'IssuedDate', 'DATE', 'ISSUED_DATE']);
 
-      const title = getVal(['ADDRESS', 'Address', 'PROP_ADDR', 'SITE_ADDRESS', 'STREET_ADDRESS']);
-      const permitNum = getVal(['PERMIT_NUM', 'PermitNumber', 'RECORD_ID', 'PERMIT_ID', 'OBJECTID']);
-      const val = getVal(['VALUATION', 'Valuation', 'JOB_VALUE', 'ESTIMATED_COST']);
-      const issueDate = getVal(['ISSUE_DATE', 'IssuedDate', 'DATE', 'ISSUED_DATE']);
+      const addr = addrKey ? props[addrKey] : 'El Paso Location';
+      const num = numKey ? props[numKey] : 'N/A';
+      const val = valKey ? props[valKey] : 'N/A';
+      const date = dateKey ? props[dateKey] : 'N/A';
 
       return `
         <div class="popup-content">
-          <h3>${title}</h3>
-          <div class="popup-row">
-            <span class="label">Type:</span>
-            <span><strong>${type}</strong></span>
-          </div>
-          <div class="popup-row">
-            <span class="label">Permit #:</span>
-            <span>${permitNum}</span>
-          </div>
-          <div class="popup-row">
-            <span class="label">Issued Date:</span>
-            <span>${issueDate}</span>
-          </div>
-          <div class="popup-row">
-            <span class="label">Valuation:</span>
-            <span>${typeof val === 'number' ? '$' + val.toLocaleString() : val}</span>
-          </div>
+          <h3>${addr}</h3>
+          <div class="popup-row"><span class="label">Type:</span><span><strong>${type}</strong></span></div>
+          <div class="popup-row"><span class="label">Permit #:</span><span>${num}</span></div>
+          <div class="popup-row"><span class="label">Date:</span><span>${date}</span></div>
+          <div class="popup-row"><span class="label">Valuation:</span><span>${typeof val === 'number' ? '$' + val.toLocaleString() : val}</span></div>
         </div>
       `;
+    }
+
+    // Safely validates feature coordinates before Leaflet attempts to build LatLng objects
+    function isValidFeature(feature) {
+      if (!feature || !feature.geometry || !feature.geometry.coordinates) return false;
+      const coords = feature.geometry.coordinates;
+      if (!Array.isArray(coords) || coords.length === 0) return false;
+
+      // Recursive check to ensure nested coordinate arrays are not empty/undefined
+      let check = coords;
+      while (Array.isArray(check[0])) {
+        check = check[0];
+      }
+      return check.length >= 2 && typeof check[0] === 'number' && typeof check[1] === 'number';
     }
 
     async function loadDataset(filename, color, typeLabel) {
@@ -311,39 +314,34 @@
         console.log(`Fetching GeoJSON from: ${fileUrl}`);
         
         const response = await fetch(fileUrl);
-        if (!response.ok) {
-          throw new Error(`Failed to load ${fileUrl}: Status ${response.status} ${response.statusText}`);
-        }
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
         const data = await response.json();
-        if (!data || !data.features) {
-          console.warn(`No features found in ${filename}`, data);
-          return { layer: null, count: 0 };
-        }
+        if (!data || !data.features) return { layer: null, count: 0 };
 
         const layer = L.geoJSON(data, {
+          filter: isValidFeature,
           style: {
             color: color,
             weight: 2,
             fillColor: color,
-            fillOpacity: 0.4
+            fillOpacity: 0.35
           },
-          pointToLayer: function (feature, latlng) {
+          pointToLayer: (feature, latlng) => {
             return L.circleMarker(latlng, {
               radius: 6,
               fillColor: color,
               color: '#ffffff',
               weight: 1,
-              opacity: 0.9,
-              fillOpacity: 0.7
+              fillOpacity: 0.8
             });
           },
-          onEachFeature: function (feature, layer) {
-            layer.bindPopup(createPopupContent(feature.properties, typeLabel));
+          onEachFeature: (feature, layer) => {
+            layer.bindPopup(buildPopup(feature.properties, typeLabel));
           }
         }).addTo(map);
 
-        return { layer, count: data.features.length };
+        return { layer, count: layer.getLayers().length };
       } catch (err) {
         console.error(`Error loading dataset (${filename}):`, err);
         return { layer: null, count: 0 };
@@ -366,10 +364,7 @@
       document.getElementById('com-count').textContent = counts.com.toLocaleString();
       document.getElementById('total-count').textContent = (counts.res + counts.com).toLocaleString();
 
-      const layersToFit = [];
-      if (resLayer) layersToFit.push(resLayer);
-      if (comLayer) layersToFit.push(comLayer);
-
+      const layersToFit = [resLayer, comLayer].filter(Boolean);
       if (layersToFit.length > 0) {
         const group = new L.featureGroup(layersToFit);
         if (group.getLayers().length > 0 && group.getBounds().isValid()) {
