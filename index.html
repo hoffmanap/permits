@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html><!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -133,7 +133,6 @@
 
     .chart-container { position: relative; height: 170px; width: 100%; }
 
-    /* Modal for Expanded Analytics */
     .modal-overlay {
       display: none;
       position: fixed;
@@ -159,7 +158,6 @@
     .modal-close { background: none; border: none; color: #94a3b8; font-size: 1.5rem; cursor: pointer; }
     .modal-body { flex: 1; position: relative; width: 100%; }
 
-    /* Leaflet Popups */
     .leaflet-popup-content-wrapper { background: #1e293b; color: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px; }
     .leaflet-popup-tip { background: #1e293b; }
     .popup-content h3 { font-size: 0.9rem; margin-bottom: 0.4rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.2rem; }
@@ -215,7 +213,6 @@
         </div>
 
         <div class="dropdown-container" style="margin-top: 0.6rem;">
-          <!-- Date Range Filter -->
           <div class="dropdown-group">
             <span class="dropdown-label">Permit Issue Date Range</span>
             <div class="date-grid">
@@ -224,7 +221,6 @@
             </div>
           </div>
 
-          <!-- District Filter -->
           <div class="dropdown-group">
             <span class="dropdown-label">Representative District</span>
             <select id="filter-district">
@@ -240,13 +236,11 @@
             </select>
           </div>
 
-          <!-- Type of Development Filter -->
           <div class="dropdown-group">
             <span class="dropdown-label">Type of Development</span>
             <select id="filter-devtype"><option value="ALL">All Development Types</option></select>
           </div>
 
-          <!-- Type of Permit Filter -->
           <div class="dropdown-group">
             <span class="dropdown-label">Type of Permit</span>
             <select id="filter-permittype"><option value="ALL">All Permit Types</option></select>
@@ -291,7 +285,6 @@
     const map = L.map('map', { center: [31.7619, -106.4850], zoom: 11, zoomControl: false });
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    // Reliable dark Esri basemap (No API key required)
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
       attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
       maxZoom: 16
@@ -305,22 +298,21 @@
     let rawDataStore = { residential: [], commercial: [] };
     let timeChart, modalChart;
 
-    // Helper to safely extract properties across messy schema variations
+    // Schema inspection helper looking for exact uppercase ESRI field names
     const getVal = (props, keys) => {
+      if (!props) return null;
       for (const k of keys) {
         if (props[k] !== undefined && props[k] !== null && props[k] !== '') return props[k];
       }
       return null;
     };
 
-    // Helper to extract a JS Date object from Epoch timestamps or strings
     function parsePermitDate(props) {
-      const raw = getVal(props, ['Issue_Date', 'IssueDate', 'ISSUE_DATE', 'Issued_Date', 'DATE']);
-      if (!raw) {
-        const year = getVal(props, ['Year_Issued', 'YearIssued', 'YEAR_ISSUED']);
-        return year ? new Date(`${year}-01-01`) : null;
-      }
-      // Handle Epoch Milliseconds (e.g. 1754352000000)
+      const raw = getVal(props, [
+        'ISSUE_DATE', 'Issue_Date', 'IssueDate', 'Issued_Date', 'DATE', 'DATE_ISSUED', 'Year_Issued', 'YEAR_ISSUED'
+      ]);
+
+      if (!raw) return null;
       if (typeof raw === 'number') return new Date(raw);
       
       const parsed = new Date(raw);
@@ -328,14 +320,14 @@
     }
 
     function buildPopup(props, type) {
-      const addr = getVal(props, ['Address', 'ADDRESS', 'Address_1', 'SITE_ADDRESS', 'LOCATION']) || 'El Paso Location';
-      const permitId = getVal(props, ['Permit_ID', 'PermitID', 'PERMITID', 'PERMIT_ID', 'Permit_Number', 'PERMIT_NUM']) || 'N/A';
+      const addr = getVal(props, ['ADDRESS', 'Address', 'Address_1', 'SITE_ADDRESS', 'LOCATION', 'PROP_ADDR']) || 'El Paso Location';
+      const permitId = getVal(props, ['PERMIT_ID', 'Permit_ID', 'PermitID', 'PERMITID', 'PERMIT_NUM', 'Permit_Number', 'RECORD_ID']) || 'N/A';
       
       const dateObj = parsePermitDate(props);
       const dateStr = dateObj ? dateObj.toLocaleDateString() : 'N/A';
 
-      const comments = getVal(props, ['Comments', 'Type_of_Development', 'Type_of_Permit', 'DESCRIPTION']) || '';
-      const district = getVal(props, ['District', 'DISTRICT', 'Council_District']) || '';
+      const comments = getVal(props, ['COMMENTS', 'Comments', 'TYPE_OF_DEVELOPMENT', 'Type_of_Development', 'TYPE_OF_PERMIT', 'DESCRIPTION']) || '';
+      const district = getVal(props, ['DISTRICT', 'District', 'Council_District', 'COUNCIL_DISTRICT']) || '';
 
       return `
         <div class="popup-content">
@@ -374,7 +366,6 @@
       }
     }
 
-    // Populate dropdowns with fallbacks when primary fields are empty
     function populateDropdowns() {
       const devTypes = new Set();
       const permitTypes = new Set();
@@ -383,15 +374,14 @@
         features.forEach(f => {
           const p = f.properties || {};
           
-          let dev = getVal(p, ['Type_of_Development', 'DEVELOPMENT_TYPE', 'Type_Development', 'Comments']);
-          let per = getVal(p, ['Type_of_Permit', 'PERMIT_TYPE', 'Type_Permit']);
+          let dev = getVal(p, ['TYPE_OF_DEVELOPMENT', 'Type_of_Development', 'DEVELOPMENT_TYPE', 'COMMENTS', 'Comments']);
+          let per = getVal(p, ['TYPE_OF_PERMIT', 'Type_of_Permit', 'PERMIT_TYPE', 'TYPE', 'Type']);
 
-          // If development type contains a bar separator like "3100 McRae | Tenant Improvement", clean it
           if (dev && dev.includes('|')) {
             dev = dev.split('|')[1].trim();
           }
 
-          if (dev && dev.length < 50) devTypes.add(String(dev).trim());
+          if (dev && dev.length < 60) devTypes.add(String(dev).trim());
           if (per) permitTypes.add(String(per).trim());
         });
       };
@@ -401,7 +391,7 @@
 
       const addOptions = (elemId, values) => {
         const select = document.getElementById(elemId);
-        select.innerHTML = select.options[0].outerHTML; // Keep first "All" option
+        select.innerHTML = select.options[0].outerHTML;
         Array.from(values).sort().forEach(v => {
           const opt = document.createElement('option');
           opt.value = v;
@@ -428,25 +418,21 @@
       return features.filter(f => {
         const p = f.properties || {};
 
-        // District filter (Strict 1-8 matching)
         if (distFilter !== 'ALL') {
-          const distVal = getVal(p, ['District', 'DISTRICT', 'Council_District']);
+          const distVal = getVal(p, ['DISTRICT', 'District', 'Council_District', 'COUNCIL_DISTRICT']);
           if (String(distVal).trim() !== distFilter) return false;
         }
 
-        // Development type filter
         if (devFilter !== 'ALL') {
-          let devVal = getVal(p, ['Type_of_Development', 'DEVELOPMENT_TYPE', 'Type_Development', 'Comments']) || '';
+          let devVal = getVal(p, ['TYPE_OF_DEVELOPMENT', 'Type_of_Development', 'DEVELOPMENT_TYPE', 'COMMENTS', 'Comments']) || '';
           if (!devVal.includes(devFilter)) return false;
         }
 
-        // Permit type filter
         if (permFilter !== 'ALL') {
-          const permVal = getVal(p, ['Type_of_Permit', 'PERMIT_TYPE', 'Type_Permit']) || '';
+          const permVal = getVal(p, ['TYPE_OF_PERMIT', 'Type_of_Permit', 'PERMIT_TYPE', 'TYPE', 'Type']) || '';
           if (String(permVal).trim() !== permFilter) return false;
         }
 
-        // Date Range filter
         if (startDate || endDate) {
           const pDate = parsePermitDate(p);
           if (!pDate) return false;
@@ -586,18 +572,15 @@
       populateDropdowns();
       renderLayers();
 
-      // Zoom to layer bounds
       const bounds = L.latLngBounds();
       if (clusterRes.getBounds().isValid()) bounds.extend(clusterRes.getBounds());
       if (clusterCom.getBounds().isValid()) bounds.extend(clusterCom.getBounds());
       if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] });
 
-      // Change Listeners for all inputs
       ['toggle-res', 'toggle-com', 'filter-district', 'filter-devtype', 'filter-permittype', 'date-start', 'date-end'].forEach(id => {
         document.getElementById(id).addEventListener('change', renderLayers);
       });
 
-      // Modal Triggers
       document.getElementById('expand-chart').addEventListener('click', () => {
         document.getElementById('chart-modal').style.display = 'flex';
         modalChart.resize();
