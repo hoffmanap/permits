@@ -1,4 +1,4 @@
-<!DOCTYPE html><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -130,7 +130,6 @@
     }
 
     .date-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-
     .chart-container { position: relative; height: 170px; width: 100%; }
 
     .modal-overlay {
@@ -170,7 +169,7 @@
   <header>
     <div>
       <h1>El Paso Building Permit Dashboard</h1>
-      <p>Interactive Permit Tracking & Trend Analysis</p>
+      <p>Interactive Permit Tracking & Spatial Analytics</p>
     </div>
   </header>
 
@@ -298,36 +297,36 @@
     let rawDataStore = { residential: [], commercial: [] };
     let timeChart, modalChart;
 
-    // Schema inspection helper looking for exact uppercase ESRI field names
-    const getVal = (props, keys) => {
+    // Smart Case-Insensitive Property Inspector
+    function getPropByKeywords(props, keywords) {
       if (!props) return null;
-      for (const k of keys) {
-        if (props[k] !== undefined && props[k] !== null && props[k] !== '') return props[k];
+      const keys = Object.keys(props);
+      for (const kw of keywords) {
+        const match = keys.find(k => k.toUpperCase().includes(kw.toUpperCase()));
+        if (match && props[match] !== undefined && props[match] !== null && props[match] !== '') {
+          return props[match];
+        }
       }
       return null;
-    };
+    }
 
     function parsePermitDate(props) {
-      const raw = getVal(props, [
-        'ISSUE_DATE', 'Issue_Date', 'IssueDate', 'Issued_Date', 'DATE', 'DATE_ISSUED', 'Year_Issued', 'YEAR_ISSUED'
-      ]);
-
+      const raw = getPropByKeywords(props, ['ISSUE_DATE', 'ISSUED_DATE', 'DATE_ISSUED', 'DATE', 'YEAR']);
       if (!raw) return null;
       if (typeof raw === 'number') return new Date(raw);
-      
       const parsed = new Date(raw);
       return !isNaN(parsed.getTime()) ? parsed : null;
     }
 
     function buildPopup(props, type) {
-      const addr = getVal(props, ['ADDRESS', 'Address', 'Address_1', 'SITE_ADDRESS', 'LOCATION', 'PROP_ADDR']) || 'El Paso Location';
-      const permitId = getVal(props, ['PERMIT_ID', 'Permit_ID', 'PermitID', 'PERMITID', 'PERMIT_NUM', 'Permit_Number', 'RECORD_ID']) || 'N/A';
+      const addr = getPropByKeywords(props, ['ADDRESS', 'LOCATION', 'SITE']) || 'El Paso Property';
+      const permitId = getPropByKeywords(props, ['PERMIT_ID', 'PERMIT_NUM', 'PERMIT', 'RECORD_ID']) || 'N/A';
       
       const dateObj = parsePermitDate(props);
       const dateStr = dateObj ? dateObj.toLocaleDateString() : 'N/A';
 
-      const comments = getVal(props, ['COMMENTS', 'Comments', 'TYPE_OF_DEVELOPMENT', 'Type_of_Development', 'TYPE_OF_PERMIT', 'DESCRIPTION']) || '';
-      const district = getVal(props, ['DISTRICT', 'District', 'Council_District', 'COUNCIL_DISTRICT']) || '';
+      const comments = getPropByKeywords(props, ['COMMENTS', 'DEVELOPMENT', 'PERMIT_TYPE', 'DESCRIPTION']) || '';
+      const district = getPropByKeywords(props, ['DISTRICT', 'COUNCIL']) || '';
 
       return `
         <div class="popup-content">
@@ -373,15 +372,14 @@
       const scanProps = (features) => {
         features.forEach(f => {
           const p = f.properties || {};
-          
-          let dev = getVal(p, ['TYPE_OF_DEVELOPMENT', 'Type_of_Development', 'DEVELOPMENT_TYPE', 'COMMENTS', 'Comments']);
-          let per = getVal(p, ['TYPE_OF_PERMIT', 'Type_of_Permit', 'PERMIT_TYPE', 'TYPE', 'Type']);
+          let dev = getPropByKeywords(p, ['DEVELOPMENT', 'COMMENTS', 'DESCRIPTION']);
+          let per = getPropByKeywords(p, ['PERMIT_TYPE', 'TYPE_PERMIT', 'PERMIT']);
 
-          if (dev && dev.includes('|')) {
+          if (dev && typeof dev === 'string' && dev.includes('|')) {
             dev = dev.split('|')[1].trim();
           }
 
-          if (dev && dev.length < 60) devTypes.add(String(dev).trim());
+          if (dev && String(dev).length < 60) devTypes.add(String(dev).trim());
           if (per) permitTypes.add(String(per).trim());
         });
       };
@@ -419,18 +417,18 @@
         const p = f.properties || {};
 
         if (distFilter !== 'ALL') {
-          const distVal = getVal(p, ['DISTRICT', 'District', 'Council_District', 'COUNCIL_DISTRICT']);
+          const distVal = getPropByKeywords(p, ['DISTRICT', 'COUNCIL']);
           if (String(distVal).trim() !== distFilter) return false;
         }
 
         if (devFilter !== 'ALL') {
-          let devVal = getVal(p, ['TYPE_OF_DEVELOPMENT', 'Type_of_Development', 'DEVELOPMENT_TYPE', 'COMMENTS', 'Comments']) || '';
+          let devVal = String(getPropByKeywords(p, ['DEVELOPMENT', 'COMMENTS', 'DESCRIPTION']) || '');
           if (!devVal.includes(devFilter)) return false;
         }
 
         if (permFilter !== 'ALL') {
-          const permVal = getVal(p, ['TYPE_OF_PERMIT', 'Type_of_Permit', 'PERMIT_TYPE', 'TYPE', 'Type']) || '';
-          if (String(permVal).trim() !== permFilter) return false;
+          const permVal = String(getPropByKeywords(p, ['PERMIT_TYPE', 'TYPE_PERMIT', 'PERMIT']) || '');
+          if (permVal.trim() !== permFilter) return false;
         }
 
         if (startDate || endDate) {
