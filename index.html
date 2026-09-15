@@ -297,12 +297,12 @@
     let rawDataStore = { residential: [], commercial: [] };
     let timeChart, modalChart;
 
-    // Smart Case-Insensitive Property Inspector
+    // Robust field search for both Residential and Commercial schema variations
     function getPropByKeywords(props, keywords) {
       if (!props) return null;
       const keys = Object.keys(props);
       for (const kw of keywords) {
-        const match = keys.find(k => k.toUpperCase().includes(kw.toUpperCase()));
+        const match = keys.find(k => k.replace(/_/g, '').toUpperCase().includes(kw.replace(/_/g, '').toUpperCase()));
         if (match && props[match] !== undefined && props[match] !== null && props[match] !== '') {
           return props[match];
         }
@@ -311,7 +311,10 @@
     }
 
     function parsePermitDate(props) {
-      const raw = getPropByKeywords(props, ['ISSUE_DATE', 'ISSUED_DATE', 'DATE_ISSUED', 'DATE', 'YEAR']);
+      const raw = getPropByKeywords(props, [
+        'ISSUEDATE', 'ISSUE_DATE', 'DATE_ISSUED', 'PERMIT_DATE', 'ISSUED', 'APP_DATE', 'DATE', 'YEAR_ISSUED'
+      ]);
+
       if (!raw) return null;
       if (typeof raw === 'number') return new Date(raw);
       const parsed = new Date(raw);
@@ -319,13 +322,13 @@
     }
 
     function buildPopup(props, type) {
-      const addr = getPropByKeywords(props, ['ADDRESS', 'LOCATION', 'SITE']) || 'El Paso Property';
-      const permitId = getPropByKeywords(props, ['PERMIT_ID', 'PERMIT_NUM', 'PERMIT', 'RECORD_ID']) || 'N/A';
+      const addr = getPropByKeywords(props, ['ADDRESS', 'LOCATION', 'SITE', 'STREET']) || 'El Paso Property';
+      const permitId = getPropByKeywords(props, ['PERMIT_ID', 'PERMIT_NUM', 'PERMIT', 'RECORD_ID', 'RECORD']) || 'N/A';
       
       const dateObj = parsePermitDate(props);
       const dateStr = dateObj ? dateObj.toLocaleDateString() : 'N/A';
 
-      const comments = getPropByKeywords(props, ['COMMENTS', 'DEVELOPMENT', 'PERMIT_TYPE', 'DESCRIPTION']) || '';
+      const comments = getPropByKeywords(props, ['COMMENTS', 'DEVELOPMENT', 'PERMIT_TYPE', 'DESCRIPTION', 'WORK_DESC']) || '';
       const district = getPropByKeywords(props, ['DISTRICT', 'COUNCIL']) || '';
 
       return `
@@ -365,6 +368,7 @@
       }
     }
 
+    // Dynamic Option Extractor with comment parsing fallback
     function populateDropdowns() {
       const devTypes = new Set();
       const permitTypes = new Set();
@@ -372,15 +376,17 @@
       const scanProps = (features) => {
         features.forEach(f => {
           const p = f.properties || {};
-          let dev = getPropByKeywords(p, ['DEVELOPMENT', 'COMMENTS', 'DESCRIPTION']);
-          let per = getPropByKeywords(p, ['PERMIT_TYPE', 'TYPE_PERMIT', 'PERMIT']);
+          let dev = getPropByKeywords(p, ['TYPE_OF_DEVELOPMENT', 'DEVELOPMENT', 'RECORD_TYPE', 'WORK_TYPE', 'COMMENTS']);
+          let per = getPropByKeywords(p, ['TYPE_OF_PERMIT', 'PERMIT_TYPE', 'PERMIT_CLASS', 'CLASS']);
 
-          if (dev && typeof dev === 'string' && dev.includes('|')) {
-            dev = dev.split('|')[1].trim();
+          // Parse strings with separators (e.g., "123 Main St | Single Family Residential")
+          if (dev && typeof dev === 'string') {
+            if (dev.includes('|')) dev = dev.split('|')[1].trim();
+            else if (dev.includes('-')) dev = dev.split('-')[0].trim();
           }
 
-          if (dev && String(dev).length < 60) devTypes.add(String(dev).trim());
-          if (per) permitTypes.add(String(per).trim());
+          if (dev && String(dev).length < 50 && String(dev).length > 2) devTypes.add(String(dev).trim());
+          if (per && String(per).length < 50 && String(per).length > 2) permitTypes.add(String(per).trim());
         });
       };
 
@@ -422,17 +428,18 @@
         }
 
         if (devFilter !== 'ALL') {
-          let devVal = String(getPropByKeywords(p, ['DEVELOPMENT', 'COMMENTS', 'DESCRIPTION']) || '');
-          if (!devVal.includes(devFilter)) return false;
+          let devVal = String(getPropByKeywords(p, ['TYPE_OF_DEVELOPMENT', 'DEVELOPMENT', 'RECORD_TYPE', 'WORK_TYPE', 'COMMENTS']) || '');
+          if (!devVal.toLowerCase().includes(devFilter.toLowerCase())) return false;
         }
 
         if (permFilter !== 'ALL') {
-          const permVal = String(getPropByKeywords(p, ['PERMIT_TYPE', 'TYPE_PERMIT', 'PERMIT']) || '');
-          if (permVal.trim() !== permFilter) return false;
+          const permVal = String(getPropByKeywords(p, ['TYPE_OF_PERMIT', 'PERMIT_TYPE', 'PERMIT_CLASS', 'CLASS']) || '');
+          if (!permVal.toLowerCase().includes(permFilter.toLowerCase())) return false;
         }
 
         if (startDate || endDate) {
           const pDate = parsePermitDate(p);
+          // If a date filter IS specified, drop un-dated features
           if (!pDate) return false;
           if (startDate && pDate < startDate) return false;
           if (endDate && pDate > endDate) return false;
