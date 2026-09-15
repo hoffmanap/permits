@@ -16,7 +16,7 @@
   <style>
     :root {
       --bg-dark: #0f172a;
-      --card-bg: rgba(30, 41, 59, 0.92);
+      --card-bg: rgba(30, 41, 59, 0.94);
       --border-color: #334155;
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
@@ -38,7 +38,7 @@
 
     header {
       background: #020617;
-      padding: 0.85rem 1.5rem;
+      padding: 0.75rem 1.5rem;
       border-bottom: 1px solid var(--border-color);
       display: flex;
       justify-content: space-between;
@@ -52,19 +52,20 @@
     #main-container { display: flex; flex: 1; position: relative; }
     #map { flex: 1; height: 100%; background-color: #020617; }
 
-    /* Floating Analytics & Controls Panel */
+    /* Sidebar Panel */
     .dashboard-sidebar {
       position: absolute;
       top: 1rem;
       left: 1rem;
       z-index: 1000;
       width: 380px;
-      max-height: calc(100vh - 5rem);
+      max-height: calc(100vh - 4.5rem);
       display: flex;
       flex-direction: column;
       gap: 0.75rem;
       overflow-y: auto;
       pointer-events: none;
+      padding-right: 4px;
     }
 
     .panel-card {
@@ -85,24 +86,79 @@
     .metric-value.res { color: #60a5fa; }
     .metric-value.com { color: #f87171; }
 
-    .chart-container { position: relative; height: 160px; width: 100%; margin-top: 0.5rem; }
-    .section-title { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.4rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.2rem; }
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 0.3rem;
+      margin-bottom: 0.5rem;
+    }
 
-    .filter-group { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.3rem; }
-    .filter-item { display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem; cursor: pointer; }
-    .checkbox-label { display: flex; align-items: center; gap: 0.5rem; }
+    .section-title { font-size: 0.78rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); }
+
+    .expand-btn {
+      background: transparent;
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 0.7rem;
+      cursor: pointer;
+    }
+    .expand-btn:hover { background: #334155; }
+
+    .filter-group { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.2rem; }
+    .filter-item { display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem; }
+    .checkbox-label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
     .badge-dot { width: 10px; height: 10px; border-radius: 50%; }
     .badge-res { background-color: var(--accent-res); }
     .badge-com { background-color: var(--accent-com); }
 
-    /* Custom Cluster Markers */
-    .marker-cluster-small { background-color: rgba(59, 130, 246, 0.6); }
-    .marker-cluster-small div { background-color: rgba(37, 99, 235, 0.85); color: #fff; }
-    .marker-cluster-medium { background-color: rgba(234, 179, 8, 0.6); }
-    .marker-cluster-medium div { background-color: rgba(202, 138, 4, 0.85); color: #fff; }
-    .marker-cluster-large { background-color: rgba(239, 68, 68, 0.6); }
-    .marker-cluster-large div { background-color: rgba(220, 38, 38, 0.85); color: #fff; }
+    /* Custom Dropdowns */
+    .dropdown-container { display: flex; flex-direction: column; gap: 0.4rem; }
+    .dropdown-group { display: flex; flex-direction: column; gap: 0.2rem; }
+    .dropdown-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; }
+    select {
+      background: #0f172a;
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 0.4rem;
+      font-size: 0.8rem;
+      outline: none;
+      width: 100%;
+    }
 
+    .chart-container { position: relative; height: 170px; width: 100%; }
+
+    /* Modal for Expanded Analytics */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(2, 6, 23, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 2000;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-content {
+      background: #1e293b;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      width: 85vw;
+      height: 75vh;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; }
+    .modal-close { background: none; border: none; color: #94a3b8; font-size: 1.5rem; cursor: pointer; }
+    .modal-body { flex: 1; position: relative; width: 100%; }
+
+    /* Leaflet Popups */
     .leaflet-popup-content-wrapper { background: #1e293b; color: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px; }
     .leaflet-popup-tip { background: #1e293b; }
     .popup-content h3 { font-size: 0.9rem; margin-bottom: 0.4rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.2rem; }
@@ -114,8 +170,8 @@
 
   <header>
     <div>
-      <h1>El Paso Construction Permit & Analytics Dashboard</h1>
-      <p>Real-Time Spatial Clustering & Trend Analysis</p>
+      <h1>El Paso Building Permit & Spatial Analytics</h1>
+      <p>Multi-Dimensional Filter & Smooth Trend Dashboard</p>
     </div>
   </header>
 
@@ -126,7 +182,7 @@
       <div class="panel-card">
         <div class="metrics-grid">
           <div class="metric-box full-width">
-            <div class="metric-title">Total Active Permits</div>
+            <div class="metric-title">Filtered Active Permits</div>
             <div class="metric-value" id="total-count">--</div>
           </div>
           <div class="metric-box">
@@ -140,34 +196,47 @@
         </div>
       </div>
 
-      <!-- Controls Card -->
+      <!-- Filters Panel -->
       <div class="panel-card">
-        <div class="section-title">Layer Control</div>
+        <div class="section-header">
+          <span class="section-title">Filter Controls</span>
+        </div>
+
         <div class="filter-group">
           <label class="filter-item">
-            <span class="checkbox-label"><span class="badge-dot badge-res"></span>New Residential</span>
+            <span class="checkbox-label"><span class="badge-dot badge-res"></span>Residential</span>
             <input type="checkbox" id="toggle-res" checked />
           </label>
           <label class="filter-item">
-            <span class="checkbox-label"><span class="badge-dot badge-com"></span>New Commercial</span>
+            <span class="checkbox-label"><span class="badge-dot badge-com"></span>Commercial</span>
             <input type="checkbox" id="toggle-com" checked />
           </label>
         </div>
-      </div>
 
-      <!-- Time Series Chart Card -->
-      <div class="panel-card">
-        <div class="section-title">Permits Issued by Month / Year</div>
-        <div class="chart-container">
-          <canvas id="timeSeriesChart"></canvas>
+        <div class="dropdown-container" style="margin-top: 0.6rem;">
+          <div class="dropdown-group">
+            <span class="dropdown-label">Representative District</span>
+            <select id="filter-district"><option value="ALL">All Districts</option></select>
+          </div>
+          <div class="dropdown-group">
+            <span class="dropdown-label">Type of Development</span>
+            <select id="filter-devtype"><option value="ALL">All Development Types</option></select>
+          </div>
+          <div class="dropdown-group">
+            <span class="dropdown-label">Type of Permit</span>
+            <select id="filter-permittype"><option value="ALL">All Permit Types</option></select>
+          </div>
         </div>
       </div>
 
-      <!-- Volume Breakdown Chart Card -->
+      <!-- Time Series Sidebar Chart -->
       <div class="panel-card">
-        <div class="section-title">Permit Volume & Share by Use Type</div>
+        <div class="section-header">
+          <span class="section-title">Permits Issued by Month / Year</span>
+          <button class="expand-btn" id="expand-chart">Expand ↗</button>
+        </div>
         <div class="chart-container">
-          <canvas id="typeDoughnutChart"></canvas>
+          <canvas id="timeSeriesChart"></canvas>
         </div>
       </div>
 
@@ -176,7 +245,20 @@
     <div id="map"></div>
   </div>
 
-  <!-- Leaflet & MarkerCluster JS -->
+  <!-- Fullscreen Chart Modal -->
+  <div class="modal-overlay" id="chart-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 style="font-size: 1.1rem;">Monthly Permit Trends (Smoothed Curve)</h2>
+        <button class="modal-close" id="close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <canvas id="modalTimeSeriesChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
@@ -191,129 +273,227 @@
 
     const DATA_PATH = 'https://raw.githubusercontent.com/hoffmanap/permits/main/data/';
 
-    // MarkerCluster Layer Groups for fast rendering
-    const clusterRes = L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 50 });
-    const clusterCom = L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 50 });
+    const clusterRes = L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 40 });
+    const clusterCom = L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 40 });
 
     let rawDataStore = { residential: [], commercial: [] };
-    let timeChart, typeChart;
+    let timeChart, modalChart;
+
+    const getVal = (props, keys) => {
+      for (const k of keys) {
+        if (props[k] !== undefined && props[k] !== null && props[k] !== '') return props[k];
+      }
+      return null;
+    };
 
     function buildPopup(props, type) {
-      const getVal = (keys) => {
-        const k = keys.find(x => props[x] !== undefined && props[x] !== null);
-        return k ? props[k] : 'N/A';
-      };
+      const addr = getVal(props, ['Address', 'ADDRESS', 'Address_1', 'SITE_ADDRESS', 'LOCATION']) || 'El Paso Location';
+      const permitId = getVal(props, ['Permit_ID', 'PermitID', 'PERMITID', 'PERMIT_ID', 'Permit_Number', 'PERMIT_NUM']) || 'N/A';
+      
+      const rawDate = getVal(props, ['Issue_Date', 'IssueDate', 'ISSUE_DATE', 'Issued_Date', 'DATE']);
+      let dateStr = 'N/A';
+      if (rawDate) {
+        const d = new Date(typeof rawDate === 'number' ? rawDate : rawDate);
+        dateStr = !isNaN(d.getTime()) ? d.toLocaleDateString() : rawDate;
+      }
 
-      const addr = getVal(['ADDRESS', 'Address', 'PROP_ADDR', 'SITE_ADDRESS', 'STREET_ADDRESS']);
-      const num = getVal(['PERMIT_NUM', 'PermitNumber', 'RECORD_ID', 'OBJECTID']);
-      const val = getVal(['VALUATION', 'Valuation', 'JOB_VALUE']);
-      const date = getVal(['ISSUE_DATE', 'IssuedDate', 'DATE']);
+      const comments = getVal(props, ['Comments', 'Type_of_Development', 'Type_of_Permit', 'DESCRIPTION']) || '';
+      const district = getVal(props, ['District', 'DISTRICT', 'Council_District']) || '';
 
       return `
         <div class="popup-content">
           <h3>${addr}</h3>
           <div class="popup-row"><span class="label">Type:</span><span><strong>${type}</strong></span></div>
-          <div class="popup-row"><span class="label">Permit #:</span><span>${num}</span></div>
-          <div class="popup-row"><span class="label">Issued:</span><span>${date}</span></div>
-          <div class="popup-row"><span class="label">Valuation:</span><span>${typeof val === 'number' ? '$' + val.toLocaleString() : val}</span></div>
+          <div class="popup-row"><span class="label">Permit ID:</span><span><strong>${permitId}</strong></span></div>
+          <div class="popup-row"><span class="label">Issue Date:</span><span>${dateStr}</span></div>
+          ${district ? `<div class="popup-row"><span class="label">District:</span><span>District ${district}</span></div>` : ''}
+          ${comments ? `<div class="popup-row" style="margin-top:4px; flex-direction:column; gap:2px;"><span class="label">Details:</span><span style="font-size:0.75rem; color:#cbd5e1;">${comments}</span></div>` : ''}
         </div>
       `;
     }
 
-    // Helper to calculate geometry centroid for polygon features
     function getCentroid(coords, geomType) {
       if (geomType === 'Point') return [coords[1], coords[0]];
-      
       let ring = coords;
       if (geomType === 'Polygon') ring = coords[0];
       if (geomType === 'MultiPolygon') ring = coords[0][0];
 
       let latSum = 0, lngSum = 0, count = 0;
       for (let i = 0; i < ring.length; i++) {
-        lngSum += ring[i][0];
-        latSum += ring[i][1];
-        count++;
+        lngSum += ring[i][0]; latSum += ring[i][1]; count++;
       }
       return [latSum / count, lngSum / count];
     }
 
     async function fetchDataset(filename) {
       try {
-        const response = await fetch(`${DATA_PATH}${filename}`);
-        if (!response.ok) return [];
-        const data = await response.json();
+        const res = await fetch(`${DATA_PATH}${filename}`);
+        if (!res.ok) return [];
+        const data = await res.json();
         return data.features || [];
       } catch (e) {
-        console.error(`Failed loading ${filename}`, e);
+        console.error(`Error loading ${filename}`, e);
         return [];
       }
     }
 
-    function processLayer(features, clusterGroup, color, label) {
-      const markers = [];
-      features.forEach(f => {
-        if (!f.geometry || !f.geometry.coordinates) return;
-        const latlng = getCentroid(f.geometry.coordinates, f.geometry.type);
-        if (isNaN(latlng[0]) || isNaN(latlng[1])) return;
+    // Populate Filter Dropdowns dynamically from JSON properties
+    function populateDropdowns() {
+      const districts = new Set();
+      const devTypes = new Set();
+      const permitTypes = new Set();
 
-        const marker = L.circleMarker(latlng, {
-          radius: 5,
-          fillColor: color,
-          color: '#ffffff',
-          weight: 1,
-          fillOpacity: 0.8
-        }).bindPopup(buildPopup(f.properties, label));
-
-        markers.push(marker);
-      });
-
-      clusterGroup.addLayers(markers);
-      map.addLayer(clusterGroup);
-      return markers.length;
-    }
-
-    // Process dates into Monthly Aggregations (YYYY-MM)
-    function aggregateMonthlyData() {
-      const monthlyCounts = {};
-
-      const processRecords = (features, typeKey) => {
+      const scanProps = (features) => {
         features.forEach(f => {
-          const props = f.properties || {};
-          const rawDate = props.ISSUE_DATE || props.IssuedDate || props.DATE;
-          if (!rawDate) return;
+          const p = f.properties || {};
+          const dist = getVal(p, ['District', 'DISTRICT', 'Council_District']);
+          const dev = getVal(p, ['Type_of_Development', 'DEVELOPMENT_TYPE', 'Type_Development']);
+          const per = getVal(p, ['Type_of_Permit', 'PERMIT_TYPE', 'Type_Permit']);
 
-          const dateObj = new Date(rawDate);
-          if (isNaN(dateObj.getTime())) return;
-
-          const monthKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
-          if (!monthlyCounts[monthKey]) {
-            monthlyCounts[monthKey] = { residential: 0, commercial: 0 };
-          }
-          monthlyCounts[monthKey][typeKey]++;
+          if (dist) districts.add(String(dist).trim());
+          if (dev) devTypes.add(String(dev).trim());
+          if (per) permitTypes.add(String(per).trim());
         });
       };
 
-      if (document.getElementById('toggle-res').checked) processRecords(rawDataStore.residential, 'residential');
-      if (document.getElementById('toggle-com').checked) processRecords(rawDataStore.commercial, 'commercial');
+      scanProps(rawDataStore.residential);
+      scanProps(rawDataStore.commercial);
 
-      const sortedMonths = Object.keys(monthlyCounts).sort();
+      const addOptions = (elemId, values) => {
+        const select = document.getElementById(elemId);
+        Array.from(values).sort().forEach(v => {
+          const opt = document.createElement('option');
+          opt.value = v;
+          opt.textContent = v;
+          select.appendChild(opt);
+        });
+      };
+
+      addOptions('filter-district', districts);
+      addOptions('filter-devtype', devTypes);
+      addOptions('filter-permittype', permitTypes);
+    }
+
+    // Dynamic Record Filter matching dropdown criteria
+    function filterFeatures(features) {
+      const distFilter = document.getElementById('filter-district').value;
+      const devFilter = document.getElementById('filter-devtype').value;
+      const permFilter = document.getElementById('filter-permittype').value;
+
+      return features.filter(f => {
+        const p = f.properties || {};
+        if (distFilter !== 'ALL') {
+          const val = getVal(p, ['District', 'DISTRICT', 'Council_District']);
+          if (String(val).trim() !== distFilter) return false;
+        }
+        if (devFilter !== 'ALL') {
+          const val = getVal(p, ['Type_of_Development', 'DEVELOPMENT_TYPE', 'Type_Development']);
+          if (String(val).trim() !== devFilter) return false;
+        }
+        if (permFilter !== 'ALL') {
+          const val = getVal(p, ['Type_of_Permit', 'PERMIT_TYPE', 'Type_Permit']);
+          if (String(val).trim() !== permFilter) return false;
+        }
+        return true;
+      });
+    }
+
+    function renderLayers() {
+      clusterRes.clearLayers();
+      clusterCom.clearLayers();
+
+      const showRes = document.getElementById('toggle-res').checked;
+      const showCom = document.getElementById('toggle-com').checked;
+
+      const filteredRes = showRes ? filterFeatures(rawDataStore.residential) : [];
+      const filteredCom = showCom ? filterFeatures(rawDataStore.commercial) : [];
+
+      const addMarkers = (features, clusterGroup, color, label) => {
+        const markers = [];
+        features.forEach(f => {
+          if (!f.geometry || !f.geometry.coordinates) return;
+          const latlng = getCentroid(f.geometry.coordinates, f.geometry.type);
+          if (isNaN(latlng[0]) || isNaN(latlng[1])) return;
+
+          const m = L.circleMarker(latlng, {
+            radius: 5, fillColor: color, color: '#fff', weight: 1, fillOpacity: 0.8
+          }).bindPopup(buildPopup(f.properties, label));
+          markers.push(m);
+        });
+        clusterGroup.addLayers(markers);
+      };
+
+      if (showRes) addMarkers(filteredRes, clusterRes, '#3b82f6', 'Residential');
+      if (showCom) addMarkers(filteredCom, clusterCom, '#ef4444', 'Commercial');
+
+      document.getElementById('res-count').textContent = filteredRes.length.toLocaleString();
+      document.getElementById('com-count').textContent = filteredCom.length.toLocaleString();
+      document.getElementById('total-count').textContent = (filteredRes.length + filteredCom.length).toLocaleString();
+
+      updateCharts(filteredRes, filteredCom);
+    }
+
+    function aggregateMonthly(resFeatures, comFeatures) {
+      const counts = {};
+
+      const process = (features, key) => {
+        features.forEach(f => {
+          const p = f.properties || {};
+          let rawDate = getVal(p, ['Issue_Date', 'IssueDate', 'ISSUE_DATE', 'Issued_Date', 'DATE']);
+          
+          let dateObj;
+          if (typeof rawDate === 'number') {
+            dateObj = new Date(rawDate);
+          } else if (rawDate) {
+            dateObj = new Date(rawDate);
+          } else {
+            const y = getVal(p, ['Year_Issued', 'YearIssued', 'YEAR_ISSUED']);
+            if (y) dateObj = new Date(`${y}-01-01`);
+          }
+
+          if (!dateObj || isNaN(dateObj.getTime())) return;
+
+          const mKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+          if (!counts[mKey]) counts[mKey] = { residential: 0, commercial: 0 };
+          counts[mKey][key]++;
+        });
+      };
+
+      process(resFeatures, 'residential');
+      process(comFeatures, 'commercial');
+
+      const months = Object.keys(counts).sort();
       return {
-        labels: sortedMonths,
-        residential: sortedMonths.map(m => monthlyCounts[m].residential),
-        commercial: sortedMonths.map(m => monthlyCounts[m].commercial)
+        labels: months,
+        resData: months.map(m => counts[m].residential),
+        comData: months.map(m => counts[m].commercial)
       };
     }
 
     function initCharts() {
-      // Time Series Line Chart
-      const ctxTime = document.getElementById('timeSeriesChart').getContext('2d');
-      timeChart = new Chart(ctxTime, {
+      const chartConfig = (ctx) => ({
         type: 'line',
         data: {
           labels: [],
           datasets: [
-            { label: 'Res', data: [], borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.3 },
-            { label: 'Com', data: [], borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', fill: true, tension: 0.3 }
+            {
+              label: 'Residential',
+              data: [],
+              borderColor: '#3b82f6',
+              backgroundColor: 'rgba(59, 130, 246, 0.15)',
+              fill: true,
+              cubicInterpolationMode: 'monotone', // Smoothed line curve
+              tension: 0.4
+            },
+            {
+              label: 'Commercial',
+              data: [],
+              borderColor: '#ef4444',
+              backgroundColor: 'rgba(239, 68, 68, 0.15)',
+              fill: true,
+              cubicInterpolationMode: 'monotone', // Smoothed line curve
+              tension: 0.4
+            }
           ]
         },
         options: {
@@ -322,86 +502,65 @@
           plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
           scales: {
             x: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { color: '#1e293b' } },
-            y: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { color: '#1e293b' } }
+            y: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { color: '#1e293b' }, beginAtZero: true }
           }
         }
       });
 
-      // Volume Breakdown Doughnut Chart
-      const ctxType = document.getElementById('typeDoughnutChart').getContext('2d');
-      typeChart = new Chart(ctxType, {
-        type: 'doughnut',
-        data: {
-          labels: ['Residential', 'Commercial'],
-          datasets: [{
-            data: [0, 0],
-            backgroundColor: ['#3b82f6', '#ef4444'],
-            borderWidth: 0
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { position: 'right', labels: { color: '#94a3b8', font: { size: 10 } } } }
-        }
+      timeChart = new Chart(document.getElementById('timeSeriesChart').getContext('2d'), chartConfig());
+      modalChart = new Chart(document.getElementById('modalTimeSeriesChart').getContext('2d'), chartConfig());
+    }
+
+    function updateCharts(resFeatures, comFeatures) {
+      const data = aggregateMonthly(resFeatures, comFeatures);
+
+      [timeChart, modalChart].forEach(chart => {
+        chart.data.labels = data.labels;
+        chart.data.datasets[0].data = data.resData;
+        chart.data.datasets[1].data = data.comData;
+        chart.update();
       });
     }
 
-    function updateCharts() {
-      const timeData = aggregateMonthlyData();
-      timeChart.data.labels = timeData.labels;
-      timeChart.data.datasets[0].data = timeData.residential;
-      timeChart.data.datasets[1].data = timeData.commercial;
-      timeChart.update();
-
-      const resCount = document.getElementById('toggle-res').checked ? rawDataStore.residential.length : 0;
-      const comCount = document.getElementById('toggle-com').checked ? rawDataStore.commercial.length : 0;
-      
-      typeChart.data.datasets[0].data = [resCount, comCount];
-      typeChart.update();
-    }
-
-    async function initDashboard() {
+    async function init() {
       initCharts();
 
-      const [resFeatures, comFeatures] = await Promise.all([
+      map.addLayer(clusterRes);
+      map.addLayer(clusterCom);
+
+      const [resData, comData] = await Promise.all([
         fetchDataset('residential.geojson'),
         fetchDataset('commercial.geojson')
       ]);
 
-      rawDataStore.residential = resFeatures;
-      rawDataStore.commercial = comFeatures;
+      rawDataStore.residential = resData;
+      rawDataStore.commercial = comData;
 
-      const resCount = processLayer(resFeatures, clusterRes, '#3b82f6', 'Residential');
-      const comCount = processLayer(comFeatures, clusterCom, '#ef4444', 'Commercial');
+      populateDropdowns();
+      renderLayers();
 
-      document.getElementById('res-count').textContent = resCount.toLocaleString();
-      document.getElementById('com-count').textContent = comCount.toLocaleString();
-      document.getElementById('total-count').textContent = (resCount + comCount).toLocaleString();
-
-      updateCharts();
-
-      // Fit map bounds
+      // Zoom to layer bounds
       const bounds = L.latLngBounds();
       if (clusterRes.getBounds().isValid()) bounds.extend(clusterRes.getBounds());
       if (clusterCom.getBounds().isValid()) bounds.extend(clusterCom.getBounds());
-      if (bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] });
+      if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] });
 
-      // Interactive Toggles
-      document.getElementById('toggle-res').addEventListener('change', (e) => {
-        if (e.target.checked) map.addLayer(clusterRes);
-        else map.removeLayer(clusterRes);
-        updateCharts();
+      // Change Listeners
+      ['toggle-res', 'toggle-com', 'filter-district', 'filter-devtype', 'filter-permittype'].forEach(id => {
+        document.getElementById(id).addEventListener('change', renderLayers);
       });
 
-      document.getElementById('toggle-com').addEventListener('change', (e) => {
-        if (e.target.checked) map.addLayer(clusterCom);
-        else map.removeLayer(clusterCom);
-        updateCharts();
+      // Modal Triggers
+      document.getElementById('expand-chart').addEventListener('click', () => {
+        document.getElementById('chart-modal').style.display = 'flex';
+        modalChart.resize();
+      });
+      document.getElementById('close-modal').addEventListener('click', () => {
+        document.getElementById('chart-modal').style.display = 'none';
       });
     }
 
-    initDashboard();
+    init();
   </script>
 </body>
 </html>
